@@ -1,4 +1,4 @@
-name: Download YouTube Video
+name: starry-dl-720max
 on:
   workflow_dispatch:
     inputs:
