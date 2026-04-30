@@ -14,14 +14,13 @@ jobs:
       - name: Setup yt-dlp
         uses: AnimMouse/setup-yt-dlp@v3
 
-      - name: Use cookies (auto-decompress)
-        uses: AnimMouse/setup-yt-dlp/cookies@v3
-        with:
-          cookies: ${{ secrets.YOUR_COOKIES }}
-          decompress: true
+      - name: Decode and decompress cookies
+        run: |
+          echo "${{ secrets.YOUR_COOKIES }}" | base64 -d | gunzip > cookies.txt
 
       - name: Download video
-        run: yt-dlp "${{ inputs.url }}" -o "video.%(ext)s"
+        run: |
+          yt-dlp --cookies cookies.txt "${{ inputs.url }}" -o "video.%(ext)s"
 
       - name: Upload video as artifact
         uses: actions/upload-artifact@v4
