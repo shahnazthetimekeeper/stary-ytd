@@ -14,10 +14,11 @@ jobs:
       - name: Setup yt-dlp
         uses: AnimMouse/setup-yt-dlp@v3
 
-      - name: Setup YouTube cookies
+      - name: Use cookies (auto-decompress)
         uses: AnimMouse/setup-yt-dlp/cookies@v3
         with:
-          cookies: ${{ secrets.YOUTUBE_COOKIES }}
+          cookies: ${{ secrets.YOUR_COOKIES }}
+          decompress: true
 
       - name: Download video
         run: yt-dlp "${{ inputs.url }}" -o "video.%(ext)s"
