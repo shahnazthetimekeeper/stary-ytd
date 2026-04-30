@@ -7,10 +7,16 @@ on:
         required: true
         type: string
 
+permissions:
+  contents: write
+
 jobs:
   download:
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
       - name: Setup yt-dlp
         uses: AnimMouse/setup-yt-dlp@v3
 
@@ -18,12 +24,19 @@ jobs:
         run: |
           echo "${{ secrets.YOUR_COOKIES }}" | base64 -d | gunzip > cookies.txt
 
-      - name: Download video
+      - name: Create videos folder
         run: |
-          yt-dlp --cookies cookies.txt "${{ inputs.url }}" -o "video.%(ext)s"
+          mkdir -p videos
 
-      - name: Upload video as artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: downloaded-video
-          path: video.*
+      - name: Download video to videos folder
+        run: |
+          yt-dlp --cookies cookies.txt "${{ inputs.url }}" \
+            -o "videos/%(title)s_%(upload_date)s.%(ext)s"
+
+      - name: Commit and push video
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git add videos/
+          git commit -m "Add video from ${{ inputs.url }}" || echo "No changes to commit"
+          git push
