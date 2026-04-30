@@ -1,0 +1,74 @@
+name: starry-dl-480max
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: 'YouTube video URL'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  download:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup yt-dlp
+        uses: AnimMouse/setup-yt-dlp@v3
+
+      - name: Decode and decompress cookies
+        run: |
+          echo "${{ secrets.YOUR_COOKIES }}" | base64 -d | gunzip > cookies.txt
+
+      - name: Clear videos folder completely
+        run: |
+          rm -rf videos
+          mkdir -p videos
+
+      - name: Download video (max 480p)
+        run: |
+          yt-dlp --cookies cookies.txt "${{ inputs.url }}" \
+            -f "bestvideo[height<=480]+bestaudio/best[height<=480]" \
+            -o "videos/original_video.%(ext)s"
+
+      - name: Get video filename
+        id: filename
+        run: |
+          FILE=$(ls videos/original_video.* | head -n 1)
+          echo "file=$FILE" >> $GITHUB_OUTPUT
+          EXT="${FILE##*.}"
+          echo "ext=$EXT" >> $GITHUB_OUTPUT
+
+      - name: Split video into 95MB chunks
+        run: |
+          cd videos
+          # Split into 95MB chunks (safe under 100MB limit)
+          split -b 95m original_video.${{ steps.filename.outputs.ext }} "chunk_"
+          
+          # Create a reassembly script
+          echo '#!/bin/bash' > reassemble.sh
+          echo 'cat chunk_* > reassembled_video.${{ steps.filename.outputs.ext }}' >> reassemble.sh
+          echo 'echo "Video reassembled as reassembled_video.${{ steps.filename.outputs.ext }}"' >> reassemble.sh
+          chmod +x reassemble.sh
+          
+          # Remove original video (only chunks remain)
+          rm original_video.${{ steps.filename.outputs.ext }}
+
+      - name: Commit and push chunks
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git add videos/
+          git commit -m "Add video chunks from ${{ inputs.url }}" 
+          git push
+
+      - name: Upload chunks as artifact (backup)
+        uses: actions/upload-artifact@v4
+        with:
+          name: video-chunks
+          path: videos/
+          retention-days: 7
