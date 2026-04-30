@@ -1,0 +1,29 @@
+name: Download YouTube Video
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: 'YouTube video URL'
+        required: true
+        type: string
+
+jobs:
+  download:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup yt-dlp
+        uses: AnimMouse/setup-yt-dlp@v3
+
+      - name: Setup YouTube cookies
+        uses: AnimMouse/setup-yt-dlp/cookies@v3
+        with:
+          cookies: ${{ secrets.YOUTUBE_COOKIES }}
+
+      - name: Download video
+        run: yt-dlp "${{ inputs.url }}" -o "video.%(ext)s"
+
+      - name: Upload video as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: downloaded-video
+          path: video.*
