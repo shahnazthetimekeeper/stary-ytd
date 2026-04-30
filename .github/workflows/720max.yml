@@ -1,0 +1,47 @@
+name: starry-dl-720max
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: 'YouTube video URL'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  download:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup yt-dlp
+        uses: AnimMouse/setup-yt-dlp@v3
+
+      - name: Decode and decompress cookies
+        run: |
+          echo "${{ secrets.YOUR_COOKIES }}" | base64 -d | gunzip > cookies.txt
+
+      - name: Create videos folder
+        run: mkdir -p videos
+
+      - name: Clean up old videos (keep latest 10)
+        run: |
+          cd videos
+          ls -t *.mp4 2>/dev/null | tail -n +11 | xargs -r rm
+
+      - name: Download video (max 720p)
+        run: |
+          yt-dlp --cookies cookies.txt "${{ inputs.url }}" \
+            -f "bestvideo[height<=720]+bestaudio/best[height<=720]" \
+            -o "videos/%(title)s_720p_%(upload_date)s.%(ext)s"
+
+      - name: Commit and push
+        run: |
+          git config user.name "GitHub Actions"
+          git config.user.email "actions@github.com"
+          git add videos/
+          git commit -m "Add 720p video from ${{ inputs.url }}" || echo "No changes"
+          git push
