@@ -31,45 +31,47 @@ jobs:
           # Delete all but the 10 most recent files
           ls -t *.mp3 *.m4a *.opus 2>/dev/null | tail -n +11 | xargs -r rm
 
-      - name: Download audio only (highest quality)
+      - name: Download audio and handle splitting
         run: |
-          yt-dlp --cookies cookies.txt "${{ inputs.url }}" \
+          mkdir -p music
+          cd music
+          
+          # Download audio
+          yt-dlp --cookies ../cookies.txt "${{ inputs.url }}" \
             -x --audio-format best \
             --audio-quality 0 \
-            -o "music/%(title)s_%(upload_date)s.%(ext)s"
-
-      - name: Get audio filename
-        id: filename
-        run: |
-          FILE=$(ls music/*.* | head -n 1)
-          echo "file=$FILE" >> $GITHUB_OUTPUT
-          EXT="${FILE##*.}"
-          echo "ext=$EXT" >> $GITHUB_OUTPUT
-
-      - name: Split audio into 95MB chunks (if needed)
-        run: |
-          cd music
-          # Check file size and split if needed
-          FILE_SIZE=$(stat -c%s "${{ steps.filename.outputs.file }}")
-          if [ $FILE_SIZE -gt 100000000 ]; then
-            split -b 95m "${{ steps.filename.outputs.file }}" "chunk_"
-            
-            # Create reassembly script
-            echo '#!/bin/bash' > reassemble.sh
-            echo 'cat chunk_* > reassembled_audio.${{ steps.filename.outputs.ext }}' >> reassemble.sh
-            echo 'echo "Audio reassembled as reassembled_audio.${{ steps.filename.outputs.ext }}"' >> reassemble.sh
-            chmod +x reassemble.sh
-            
-            # Remove original audio (only chunks remain)
-            rm "${{ steps.filename.outputs.file }}"
+            -o "%(title)s_%(upload_date)s.%(ext)s"
+          
+          # Wait a moment for file to be fully written
+          sleep 2
+          
+          # Find the downloaded audio file
+          AUDIO_FILE=$(ls *.opus *.m4a *.mp3 2>/dev/null | head -n 1)
+          echo "Downloaded: $AUDIO_FILE"
+          
+          # Check if file is larger than 100MB and split if needed
+          if [ -f "$AUDIO_FILE" ]; then
+            FILE_SIZE=$(stat -c%s "$AUDIO_FILE" 2>/dev/null || stat -f%z "$AUDIO_FILE" 2>/dev/null)
+            if [ "$FILE_SIZE" -gt 100000000 ]; then
+              echo "File is $FILE_SIZE bytes, splitting into 95MB chunks..."
+              split -b 95m "$AUDIO_FILE" "chunk_"
+              echo '#!/bin/bash' > reassemble.sh
+              echo "cat chunk_* > reassembled_$AUDIO_FILE" >> reassemble.sh
+              chmod +x reassemble.sh
+              rm "$AUDIO_FILE"
+              echo "Original file removed, chunks created"
+            else
+              echo "File under 100MB ($FILE_SIZE bytes), no split needed"
+            fi
           else
-            echo "File under 100MB, no split needed"
+            echo "ERROR: No audio file found!"
+            exit 1
           fi
 
       - name: Commit and push audio
         run: |
           git config user.name "GitHub Actions"
-          git config user.email "github-actions@users.noreply.github.com"
+          git config.user.email "github-actions@users.noreply.github.com"
           git add music/
           git commit -m "Add audio from ${{ inputs.url }}" || echo "No changes to commit"
           git push
