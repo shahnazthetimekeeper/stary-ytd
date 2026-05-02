@@ -1,0 +1,39 @@
+name: starry-dl-720p
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: 'YouTube video URL'
+        required: true
+        type: string
+
+jobs:
+  download:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup yt-dlp
+        uses: AnimMouse/setup-yt-dlp@v3
+
+      - name: Decode cookies
+        run: |
+          echo "${{ secrets.YOUR_COOKIES }}" | base64 -d | gunzip > cookies.txt
+
+      - name: Install PO Token Provider
+        run: |
+          pip install bgutil-ytdlp-pot-provider
+          docker run -d --name bgutil-provider -p 4416:4416 brainicism/bgutil-ytdlp-pot-provider
+
+      - name: Download 720p video with audio
+        run: |
+          yt-dlp --cookies cookies.txt "${{ inputs.url }}" \
+            -f "bestvideo[height<=720]+bestaudio/best[height<=720]" \
+            --merge-output-format mp4 \
+            --extractor-args "youtubepot-bgutilhttp:base_url=http://localhost:4416" \
+            -o "%(title)s_720p.%(ext)s"
+
+      - name: Upload as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: video-720p
+          path: "*.mp4"
+          retention-days: 7
